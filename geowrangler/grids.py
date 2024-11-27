@@ -10,6 +10,11 @@ from functools import reduce
 from typing import List, Tuple, Union, Optional, Iterable
 
 import h3
+from h3ronpy.pandas.vector import geodataframe_to_cells, cells_dataframe_to_geodataframe
+from h3ronpy.polars.vector import geometry_to_cells as pl_geometry_to_cells
+from h3ronpy.polars import cells_to_string as pl_cells_to_string
+from h3ronpy.pandas import cells_to_string as pd_cells_to_string
+
 import morecantile
 import numpy as np
 import pandas as pd
@@ -438,36 +443,26 @@ class H3GridGenerator:
 # %% ../notebooks/00_grids.ipynb 19
 @patch
 def get_hexes_for_polygon(self: H3GridGenerator, poly: Polygon):
-    return h3.polyfill(
-        poly.__geo_interface__,
-        self.resolution,
-        geo_json_conformant=True,
-    )
+    cells = pl_cells_to_string(pl_geometry_to_cells(poly, self.resolution))
+    return cells.to_list()
 
 # %% ../notebooks/00_grids.ipynb 20
 @patch
 def generate_grid(self: H3GridGenerator, aoi_gdf: GeoDataFrame) -> DataFrame:
     reprojected_gdf = aoi_gdf.to_crs("epsg:4326")  # h3 hexes are in epsg:4326 CRS
-    hex_ids = set()
-    unary_union = reprojected_gdf.union_all(method="unary")
-    if isinstance(unary_union, Polygon):
-        hex_ids.update(self.get_hexes_for_polygon(unary_union))
-    else:
-        for geom in unary_union.geoms:
-            _hexes = self.get_hexes_for_polygon(geom)
-            hex_ids.update(_hexes)
-    df = DataFrame({"hex_id": list(hex_ids)})
+    df = geodataframe_to_cells(
+        reprojected_gdf,
+        self.resolution,
+        containment_mode=ContainmentMode.ContainsBoundary,
+    )
     if self.return_geometry is False:
+        df["hex_id"] = df.index.apply(pd_cells_to_string)
         return df
-    hexes = df.hex_id.apply(
-        lambda id: Polygon(h3.h3_to_geo_boundary(id, geo_json=True))
-    )
-    h3_gdf = GeoDataFrame(
-        df,
-        geometry=hexes,
-        crs="epsg:4326",
-    )
-    return h3_gdf.to_crs(aoi_gdf.crs)
+    else:
+        h3_gdf = cells_dataframe_to_geodataframe(df, "cell")
+        h3_gdf["hex_id"] = pd_cells_to_string(h3_gdf["cell"])
+        h3_gdf.drop("cell", inplace=True, axis=1)
+        return h3_gdf.to_crs(aoi_gdf.crs)
 
 # %% ../notebooks/00_grids.ipynb 22
 class BingTileGridGenerator:
