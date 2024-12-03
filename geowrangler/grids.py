@@ -8,17 +8,19 @@ __all__ = ['SquareGridGenerator', 'FastSquareGridGenerator', 'H3GridGenerator', 
 import logging
 from functools import reduce
 from typing import List, Tuple, Union, Optional, Iterable
-
+import polars as pl
+import h3ronpy.polars
 import h3
 from h3ronpy.pandas.vector import geodataframe_to_cells, cells_dataframe_to_geodataframe
 from h3ronpy.polars.vector import geometry_to_cells as pl_geometry_to_cells
 from h3ronpy.polars import cells_to_string as pl_cells_to_string
 from h3ronpy.pandas import cells_to_string as pd_cells_to_string
+from h3ronpy import ContainmentMode
 
 import morecantile
 import numpy as np
 import pandas as pd
-import polars as pl
+
 import warnings
 from fastcore.all import defaults, parallel
 from fastcore.basics import patch
@@ -30,6 +32,7 @@ from shapely.geometry import Polygon, shape
 from shapely.prepared import prep
 
 from geowrangler.gridding_utils import polygon_fill
+
 
 logger = logging.getLogger(__name__)
 
